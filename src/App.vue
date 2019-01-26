@@ -39,12 +39,32 @@
             <h1>Face Mesh</h1>
           </div>
 
-          <router-view></router-view>
+          <router-view :faceMgmt="faceMgmt"></router-view>
         </div>
       </div>
     </div>
   </div>
 </template>
+
+<script>
+import "whatwg-fetch";
+import faceMgmt from "./FaceMgmt.js";
+
+export default {
+  name: "App",
+
+  data: function() {
+    return {
+      faceMgmt
+    };
+  },
+  async mounted() {
+    const self = this;
+    console.log(this.faceMgmt);
+    this.faceMgmt.loadModels();
+  }
+};
+</script>
 
 <style>
 </style>

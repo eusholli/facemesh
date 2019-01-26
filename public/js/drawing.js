@@ -52,24 +52,52 @@ function drawLandmarks(
   canvas,
   results,
   withBoxes = true,
-  withRedaction
+  withRedaction = false,
+  labeledFaceDescriptors = undefined,
+  withFaces = false,
+  knownFaces
 ) {
   const resizedResults = resizeCanvasAndResults(dimensions, canvas, results);
+
+  if (withBoxes) {
+    if (labeledFaceDescriptors) {
+      const maxDescriptorDistance = 0.6;
+      const faceMatcher = new faceapi.FaceMatcher(
+        labeledFaceDescriptors,
+        maxDescriptorDistance
+      );
+
+      const faceMatchResults = resizedResults.map(fd =>
+        faceMatcher.findBestMatch(fd.descriptor)
+      );
+
+      const boxesWithText = faceMatchResults.map((bestMatch, i) => {
+        const box = resizedResults[i].detection.box;
+        const key = bestMatch.label;
+        const knownFace = knownFaces.get(key);
+        const text = knownFace.details.name;
+        const boxWithText = new faceapi.BoxWithText(box, text);
+        return boxWithText;
+      });
+
+      faceapi.drawDetection(canvas, boxesWithText);
+    } else {
+      faceapi.drawDetection(canvas, resizedResults.map(det => det.detection));
+    }
+  }
 
   if (withRedaction) {
     drawRedactions(resizedResults.map(det => det.detection), canvas);
     return;
   }
+  if (withFaces) {
+    const faceLandmarks = resizedResults.map(det => det.landmarks);
 
-  if (withBoxes) {
-    faceapi.drawDetection(canvas, resizedResults.map(det => det.detection));
+    const drawLandmarksOptions = {
+      lineWidth: 2,
+      drawLines: true,
+      color: "green"
+    };
+    faceapi.drawLandmarks(canvas, faceLandmarks, drawLandmarksOptions);
   }
-
-  const faceLandmarks = resizedResults.map(det => det.landmarks);
-  const drawLandmarksOptions = {
-    lineWidth: 2,
-    drawLines: true,
-    color: "green"
-  };
-  faceapi.drawLandmarks(canvas, faceLandmarks, drawLandmarksOptions);
 }

@@ -40,7 +40,16 @@
               </div>
             </div>
           </div>
-
+          <div class="row">
+            <div class="col">
+              <button type="button" class="btn btn-primary" @click="captureWebCamImage()">Capture</button>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col">
+              <h2>Face Detection</h2>
+            </div>
+          </div>
           <div class="row">
             <div class="col-7">
               <div class="form-group row">
@@ -72,21 +81,6 @@
             </div>
           </div>
 
-          <div v-if="learnButtonActive === true" class="row">
-            <div class="col">
-              <button
-                type="button"
-                class="btn btn-primary"
-                @click="captureWebCamImage()"
-              >Learn Captured Faces</button>
-            </div>
-          </div>
-          <div class="row">
-            <div class="col">
-              <h2>Face Detection</h2>
-            </div>
-          </div>
-
           <div class="row">
             <div class="col">
               <div class="form-group row">
@@ -98,7 +92,7 @@
                     class="form-control input-sm"
                     v-model="selectedFaceDetector"
                   >
-                    <template v-for="(option, index) in faceMgmt.faceDetectionOptions">
+                    <template v-for="(option, index) in faceDetectionOptions">
                       <option :key="index" :value="option.value">{{ option.label }}</option>
                     </template>
                   </select>
@@ -148,26 +142,17 @@
               </div>
               <div class="col">
                 <div v-if="selectedFaceDetector === 'ssd_mobilenetv1'">
-                  Min Confidence: {{faceMgmt.minConfidence}}
+                  Min Confidence: {{minConfidence}}
                   <button
                     class="btn btn-primary"
-                    @change="changeAdvancedSettings()"
                     @click="dec('minConfidence',0.1,0)"
-                  >-</button>
-                  <button
-                    class="btn btn-primary"
-                    @change="changeAdvancedSettings()"
-                    @click="inc('minConfidence',0.1,1)"
-                  >+</button>
+                  >' - '</button>
+                  <button class="btn btn-primary" @click="inc('minConfidence',0.1,1)">' + '</button>
                 </div>
                 <div v-if="selectedFaceDetector === 'tiny_face_detector'">
                   <div class="form-group">
                     <label>Input Size</label>
-                    <select
-                      id="inputSize"
-                      @change="changeAdvancedSettings()"
-                      v-model.number="faceMgmt.inputSize"
-                    >
+                    <select id="inputSize" @change="changeResolution()" v-model.number="inputSize">
                       <option value="128">128 x 128</option>
                       <option value="160">160 x 160</option>
                       <option value="224">224 x 224</option>
@@ -178,27 +163,21 @@
                     </select>
                   </div>
                   <div class="col">
-                    Score Threshold: {{faceMgmt.scoreThreshold}}
+                    Score Threshold: {{scoreThreshold}}
                     <button
                       class="btn btn-primary"
-                      @change="changeAdvancedSettings()"
                       @click="dec('scoreThreshold',0.1,0)"
-                    >-</button>
-                    <button
-                      class="btn btn-primary"
-                      @change="changeAdvancedSettings()"
-                      @click="inc('scoreThreshold',0.1,1)"
-                    >+</button>
+                    >' - '</button>
+                    <button class="btn btn-primary" @click="inc('scoreThreshold',0.1,1)">' + '</button>
                   </div>
                 </div>
                 <div v-if="selectedFaceDetector === 'mtcnn'">
-                  Min Face Size: {{faceMgmt.minFaceSize}}
+                  Min Face Size: {{minFaceSize}}
                   <button
                     class="btn btn-primary"
-                    @change="changeAdvancedSettings()"
                     @click="dec('minFaceSize',20,50)"
-                  >-</button>
-                  <button class="btn btn-primary" @click="inc('minFaceSize',20,300)">+</button>
+                  >' - '</button>
+                  <button class="btn btn-primary" @click="inc('minFaceSize',20,300)">' + '</button>
                 </div>
               </div>
             </div>
@@ -279,7 +258,6 @@ export default {
           value: "None"
         }
       ],
-      learnButtonActive: false,
       status: "camera",
       capturedImage: undefined,
       capturedFaces: [],
@@ -295,9 +273,7 @@ export default {
       processingTime: 0,
       fps: 0,
 
-      selectedCamera: "None",
-      selectedFaceDetector: "None",
-      currentFaceDetector: undefined
+      selectedCamera: "None"
     };
   },
   mounted() {
@@ -315,44 +291,6 @@ export default {
     });
   },
   methods: {
-    inc(property, amt, max) {
-      this.faceMgmt[property] = Math.min(
-        faceapi.round(this.faceMgmt[property] + amt),
-        max
-      );
-    },
-    dec(property, amt, min) {
-      this.faceMgmt[property] = Math.max(
-        faceapi.round(this.faceMgmt[property] - amt),
-        min
-      );
-    },
-    updateTimeStats: function(timeInMs) {
-      this.forwardTimes = [timeInMs].concat(this.forwardTimes).slice(0, 30);
-      const avgTimeInMs =
-        this.forwardTimes.reduce((total, t) => total + t) /
-        this.forwardTimes.length;
-      this.processingTime = `${Math.round(avgTimeInMs)}`;
-      this.fps = `${faceapi.round(1000 / avgTimeInMs)}`;
-    },
-    changeFaceDetection: async function() {
-      console.log(this.selectedFaceDetector);
-      if (this.selectedFaceDetector === "None") {
-        this.currentFaceDetector = undefined;
-        this.learnButtonActive = false;
-        const overlay = this.$refs.overlay;
-        overlay.getContext("2d").clearRect(0, 0, overlay.width, overlay.height);
-      } else {
-        this.currentFaceDetector = this.faceMgmt.getFaceDetector(
-          this.selectedFaceDetector
-        );
-        this.learnButtonActive = true;
-      }
-    },
-    changeAdvancedSettings: function() {
-      console.log("changeAdvancedSettings");
-    },
-
     chooseCamera: function() {
       console.log(this.selectedCamera);
 
@@ -396,7 +334,6 @@ export default {
 
     captureWebCamImage: function() {
       console.log("captureWebCamImage");
-
       const overlay = this.$refs.overlay;
       const videoEl = this.$refs.inputVideo;
 
@@ -466,8 +403,7 @@ export default {
     },
 
     onPlay: async function() {
-      const ts = Date.now();
-
+      // console.log("onPlay");
       const videoEl = this.$refs.inputVideo;
       const overlay = this.$refs.overlay;
       const self = this;
@@ -478,13 +414,10 @@ export default {
         return;
       }
 
-      if (videoEl.paused || videoEl.ended) {
-        return;
-      }
-      if (!this.currentFaceDetector)
+      if (videoEl.paused || videoEl.ended)
         return (this.playTimer = setTimeout(() => this.onPlay()));
 
-      const faceDetector = this.currentFaceDetector;
+      const faceDetector = this.faceMgmt.getDefaultFaceDetector();
 
       const resultArray = await faceDetector.detectFaces(videoEl, {
         withAllFaces: false,
@@ -492,35 +425,21 @@ export default {
         withFaceDescriptor: true
       });
 
-      if (!this.currentFaceDetector)
-        return (this.playTimer = setTimeout(() => this.onPlay()));
-
       if (resultArray) {
         if (faceDetector.labeledFaceDescriptors.length > 0) {
           drawLandmarks(
             videoEl,
             overlay,
             resultArray,
-            this.withBoxes,
-            this.withRedaction,
-            faceDetector.labeledFaceDescriptors,
-            this.withFaceLandmarks,
-            faceDetector.knownFaces
+            true,
+            false,
+            faceDetector.labeledFaceDescriptors
           );
         } else {
-          drawLandmarks(
-            videoEl,
-            overlay,
-            resultArray,
-            this.withBoxes,
-            this.withRedaction,
-            undefined,
-            this.withFaceLandmarks
-          );
+          drawLandmarks(videoEl, overlay, resultArray, true, false, undefined);
         }
       }
 
-      this.updateTimeStats(Date.now() - ts);
       this.playTimer = setTimeout(() => this.onPlay());
     }
   }

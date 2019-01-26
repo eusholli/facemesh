@@ -274,6 +274,9 @@ export default {
     console.log("before loadFaceLandmarkModel loaded");
     await faceapi.loadFaceLandmarkModel("/models");
     console.log("loadFaceLandmarkModel loaded");
+    console.log("before loadFaceRecognitionModel loaded");
+    await faceapi.loadFaceRecognitionModel("/models");
+    console.log("loadFaceRecognitionModel loaded");
   },
   methods: {
     inc(property, amt, max) {
