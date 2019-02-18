@@ -3,12 +3,18 @@ function resizeCanvasAndResults(dimensions, canvas, results) {
     dimensions instanceof HTMLVideoElement
       ? faceapi.getMediaDimensions(dimensions)
       : dimensions;
+
   canvas.width = width;
   canvas.height = height;
 
   // resize detections (and landmarks) in case displayed image is smaller than
   // original size
-  return results.map(res => res.forSize(width, height));
+  // return results.map(res => res.forSize(width, height));
+
+  return faceapi.resizeResults(results, {
+    width: width,
+    height: height
+  });
 }
 
 function drawRedactions(resizedDetections, canvas) {

@@ -12,6 +12,9 @@ export default new Router({
 
   routes: [
     {
+      path: "/public"
+    },
+    {
       path: "/",
       name: "faceTraining",
       component: FaceTraining
@@ -32,6 +35,7 @@ export default new Router({
       path: "/about",
       name: "about",
       component: About
-    }
+    },
+    { path: "*", redirect: "/" }
   ]
 });

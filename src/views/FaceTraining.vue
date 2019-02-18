@@ -6,7 +6,7 @@
       </div>
     </div>
 
-    <div v-if="status === 'camera'">
+    <div v-show="status === 'camera'">
       <template v-if="cameras.length > 0">
         <div class="form-group row">
           <label class="col-sm-4 col-form-label">Select Camera</label>
@@ -35,6 +35,7 @@
                   id="inputVideo"
                   autoplay
                   muted
+                  loop
                 ></video>
                 <canvas ref="overlay" id="overlay"/>
               </div>
@@ -79,6 +80,15 @@
                 class="btn btn-primary"
                 @click="captureWebCamImage()"
               >Learn Captured Faces</button>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col">
+              <div class="form-group">
+                <label for="withEdgeMesh">
+                  <input type="checkbox" id="withEdgeMesh" v-model="withEdgeMesh"> Edge Mesh Active
+                </label>
+              </div>
             </div>
           </div>
           <div class="row">
@@ -151,14 +161,9 @@
                   Min Confidence: {{faceMgmt.minConfidence}}
                   <button
                     class="btn btn-primary"
-                    @change="changeAdvancedSettings()"
                     @click="dec('minConfidence',0.1,0)"
                   >-</button>
-                  <button
-                    class="btn btn-primary"
-                    @change="changeAdvancedSettings()"
-                    @click="inc('minConfidence',0.1,1)"
-                  >+</button>
+                  <button class="btn btn-primary" @click="inc('minConfidence',0.1,0.9)">+</button>
                 </div>
                 <div v-if="selectedFaceDetector === 'tiny_face_detector'">
                   <div class="form-group">
@@ -181,21 +186,15 @@
                     Score Threshold: {{faceMgmt.scoreThreshold}}
                     <button
                       class="btn btn-primary"
-                      @change="changeAdvancedSettings()"
                       @click="dec('scoreThreshold',0.1,0)"
                     >-</button>
-                    <button
-                      class="btn btn-primary"
-                      @change="changeAdvancedSettings()"
-                      @click="inc('scoreThreshold',0.1,1)"
-                    >+</button>
+                    <button class="btn btn-primary" @click="inc('scoreThreshold',0.1,0.9)">+</button>
                   </div>
                 </div>
                 <div v-if="selectedFaceDetector === 'mtcnn'">
                   Min Face Size: {{faceMgmt.minFaceSize}}
                   <button
                     class="btn btn-primary"
-                    @change="changeAdvancedSettings()"
                     @click="dec('minFaceSize',20,50)"
                   >-</button>
                   <button class="btn btn-primary" @click="inc('minFaceSize',20,300)">+</button>
@@ -231,6 +230,14 @@
                     v-model="face.name"
                   >
                 </div>
+                <div class="form-group">
+                  <label :for="'face-consent-' + index">
+                    <input type="checkbox" :id="'face-consent-' + index" v-model="face.consent"> Consent
+                  </label>
+                </div>
+                <div>
+                  <country-select v-model="face.country" :country="face.country" topCountry="US"/>
+                </div>
               </div>
             </template>
           </div>
@@ -246,19 +253,24 @@
 </template>
 
 <script>
+import Drawing from "../Drawing.js";
+
 function stopVideo(self) {
   if (self.playTimer) {
     clearTimeout(self.playTimer);
     self.playTimer = undefined;
   }
 
-  self.currentStream.getTracks().forEach(track => {
-    track.stop();
-  });
+  if (self.currentStream) {
+    self.currentStream.getTracks().forEach(track => {
+      track.stop();
+    });
+  }
 
   const video = self.$refs.inputVideo;
   if (video) {
     video.srcObject = undefined;
+    video.src = undefined;
   }
 }
 
@@ -270,13 +282,15 @@ export default {
   },
   data: function() {
     return {
-      // faceAlgorithmTypes: [SSD_MOBILENETV1, TINY_FACE_DETECTOR, MTCNN],
-      // loadedFaceAlgorithms: {},
-
+      drawing: undefined,
       cameras: [
         {
           label: "None",
           value: "None"
+        },
+        {
+          label: "Simulate",
+          value: "Simulate"
         }
       ],
       learnButtonActive: false,
@@ -297,10 +311,15 @@ export default {
 
       selectedCamera: "None",
       selectedFaceDetector: "None",
-      currentFaceDetector: undefined
+      currentFaceDetector: undefined,
+
+      withEdgeMesh: true
     };
   },
   mounted() {
+    const videoEl = this.$refs.inputVideo;
+    const canvasEl = this.$refs.overlay;
+    this.drawing = new Drawing(videoEl, canvasEl);
     let count = 1;
     const self = this;
     navigator.mediaDevices.enumerateDevices().then(function(mediaDevices) {
@@ -320,13 +339,44 @@ export default {
         faceapi.round(this.faceMgmt[property] + amt),
         max
       );
+      this.currentFaceDetector = this.faceMgmt.updateModel(
+        this.selectedFaceDetector
+      );
     },
     dec(property, amt, min) {
       this.faceMgmt[property] = Math.max(
         faceapi.round(this.faceMgmt[property] - amt),
         min
       );
+      this.currentFaceDetector = this.faceMgmt.updateModel(
+        this.selectedFaceDetector
+      );
     },
+    changeEdgeMeshStatus: function() {
+      if (this.withEdgeMesh) {
+        alert("To reactivate Edge Mesh please reload the page");
+      } else {
+        navigator.serviceWorker
+          .getRegistrations()
+          .then(function(registrations) {
+            for (let registration of registrations) {
+              registration
+                .unregister()
+                .then(function() {
+                  return self.clients.matchAll();
+                })
+                .then(function(clients) {
+                  clients.forEach(client => {
+                    if (client.url && "navigate" in client) {
+                      client.navigate(client.url);
+                    }
+                  });
+                });
+            }
+          });
+      }
+    },
+
     updateTimeStats: function(timeInMs) {
       this.forwardTimes = [timeInMs].concat(this.forwardTimes).slice(0, 30);
       const avgTimeInMs =
@@ -351,6 +401,9 @@ export default {
     },
     changeAdvancedSettings: function() {
       console.log("changeAdvancedSettings");
+      this.currentFaceDetector = this.faceMgmt.updateModel(
+        this.selectedFaceDetector
+      );
     },
 
     chooseCamera: function() {
@@ -359,12 +412,15 @@ export default {
       if (typeof this.currentStream !== "undefined") {
         stopVideo(this);
       }
+
       if (this.selectedCamera === "None") {
+        return;
+      } else if (this.selectedCamera === "Simulate") {
+        this.$refs.inputVideo.src = "/Friends.mp4";
         return;
       }
 
       const self = this;
-
       const videoConstraints = {};
       if (this.selectedCamera === "") {
         videoConstraints.facingMode = "environment";
@@ -441,6 +497,8 @@ export default {
         self.capturedFaces.push({
           imageUrl: faceImage[0].toDataURL("image/png"),
           name: "",
+          consent: false,
+          country: "",
           faceDescriptor: ffd.descriptor
         });
       });
@@ -487,7 +545,7 @@ export default {
       const faceDetector = this.currentFaceDetector;
 
       const resultArray = await faceDetector.detectFaces(videoEl, {
-        withAllFaces: false,
+        withAllFaces: this.withAllFaces,
         withFaceLandmarks: true,
         withFaceDescriptor: true
       });
@@ -496,21 +554,18 @@ export default {
         return (this.playTimer = setTimeout(() => this.onPlay()));
 
       if (resultArray) {
-        if (faceDetector.labeledFaceDescriptors.length > 0) {
-          drawLandmarks(
-            videoEl,
-            overlay,
+        const labeledFaceDescriptors = this.faceMgmt.labeledFaceDescriptors;
+        if (labeledFaceDescriptors.length > 0) {
+          this.drawing.draw(
             resultArray,
             this.withBoxes,
             this.withRedaction,
-            faceDetector.labeledFaceDescriptors,
+            labeledFaceDescriptors,
             this.withFaceLandmarks,
-            faceDetector.knownFaces
+            this.faceMgmt.knownFaces
           );
         } else {
-          drawLandmarks(
-            videoEl,
-            overlay,
+          this.drawing.draw(
             resultArray,
             this.withBoxes,
             this.withRedaction,

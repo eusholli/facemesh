@@ -10,6 +10,7 @@
     "bootstrap": "^4.2.1",
     "face-api.js": "^0.17.1",
     "vue": "^2.5.21",
+    "vue-country-region-select": "^1.1.0",
     "vue-router": "^3.0.1",
     "whatwg-fetch": "^3.0.0"
   },
